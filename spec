@@ -10,6 +10,8 @@
 import os
 import serial
 
+save_path = "spectrum"
+
 # TODO -
 # allow it to figure out the baud rate on startup.
 #  it will be 9600 if the device was just booted.
@@ -172,6 +174,12 @@ def spec_ascii () :
     #print ( buf.decode('ascii') )
     # monitor ()
 
+# for windows, do we need to add '\r\n' ?
+def spec_save ( path, lines ) :
+    with open ( path, 'w' ) as file :
+        for line in lines :
+            file.write ( line + "\n" )
+
 # An ascii spectrum file is 14336 bytes
 # This is 2048 * 7 (5 digits + "\r\n"
 # Must be upper case S
@@ -182,9 +190,16 @@ def spec_scan () :
     buf = ser.read ( 3 )
     # discard the ACK
     buf = ser.read ( 5 )
-    image = ser.read_until ( "\r\n", 16000 )
-    #print ( image )
-    print ( len(image) )
+    raw_image = ser.read_until ( "\r\n", 16000 )
+    #print ( raw_image )
+    print ( len(raw_image) )
+
+    # dump the null byte at the end
+    # and the last \r\n
+    image = raw_image[:-3].decode ( 'ascii' )
+    im = image.split ( "\r\n" )
+    print ( len(im) )
+    spec_save ( save_path, im )
 
 spec_init ()
 
