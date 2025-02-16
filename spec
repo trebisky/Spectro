@@ -1,16 +1,23 @@
 #!/bin/python3
 
-# First do: dnf install python3-pyserial
+# spec
+#
+# Tom Trebisky  2-13-2025
+#
+# A Python program to talk to the
+# B and W Tech Model BTC110-S spectrometer.
 
 import os
 import serial
 
-# tester
+# TODO -
+# allow it to figure out the baud rate on startup.
+#  it will be 9600 if the device was just booted.
+#  it will be 115200 if this program has been started before.
+
 #
-# Tom Trebisky  2-13-2025
-#
-# This is my first Python program to talk to the
-# B and W Tech Model BTC110-S spectrometer.
+# First do: dnf install python3-pyserial
+
 #
 # When powered up, it spits out a bunch of characters
 # that so far make no sense, then prints a nice
@@ -27,8 +34,6 @@ import serial
 
 device = "/dev/ttyUSB0"
 TIMEOUT = 2
-#baud = 9600
-baud = 19200
 
 # At one time I was having trouble getting Python to
 # set up the serial port baud rate correctly, but I was
@@ -38,10 +43,14 @@ baud = 19200
 #setup_cmd = "picocom -qrX -b 9600 " + device
 #print ( setup_cmd )
 
-ser = serial.Serial ( device, baud, timeout=TIMEOUT )
-print ( "Using port " + ser.name)
-
-#UnicodeDecodeError:
+# The python pyserial "read()" method reads one byte by default.
+# You can ask for more, but will need to wait for the timeout
+# if that many are not available.
+# There is also read_until () which reads until a certain
+# sequence is found ('\n' by default).
+# You could do:  read_until ( "\r\n", 32 )
+# HOWEVER, asking for more than you will actually get
+# means that you will wait for a timeout
 
 # read from serial port until timeout
 def monitor () :
@@ -75,6 +84,7 @@ BAUD_2400 = 5
 BAUD_1200 = 6
 BAUD_600 = 7
 
+
 # We get the echo, then part of the ACK
 # received:  1 b'K' K
 # received:  1 b'2' 2
@@ -90,15 +100,58 @@ BAUD_600 = 7
 def spec_baud ( rate ) :
     cmd = f"K{rate}\n"
     ser.write ( cmd.encode('ascii') )
-    monitor ()
+    buf = ser.read_until ( "\r\n", 9 );
+    # We get 9 bytes if going from 9600 to 9600
+    # We get 8 bytes when actually changing
+    #print ( "Baud got ", len(buf) )
+    #monitor ()
 
+    if rate == BAUD_9600 :
+        ser.baudrate = 9600
     if rate == BAUD_19200 :
         ser.baudrate = 19200
     if rate == BAUD_115200 :
         ser.baudrate = 115200
-    #ser.setBaudrate(115200)
 
-    monitor ()
+# We try 115200 first and send the "a" command.
+# If that fails, we must be at 9600
+def spec_init () :
+    global ser
+    baud = 115200
+
+    ser = serial.Serial ( device, baud, timeout=TIMEOUT )
+    print ( "Using port " + ser.name)
+
+    cmd = "a\n"
+    ser.write ( cmd.encode('ascii') )
+    buf = ser.read_until ( "\r\n", 8 );
+
+    if len(buf) == 8 :
+        print ( "init found device at 115200" )
+        return
+
+    print ( "init resetting port to 9600" )
+    ser.baudrate = 9600
+
+    # this will fail, but it gets things in
+    # the mood to accept the baud rate change
+    # We typically see a 3 byte response
+    cmd = "a\n"
+    ser.write ( cmd.encode('ascii') )
+    buf = ser.read_until ( "\r\n", 8 );
+    #print ( "cleanup got ", len(buf) )
+
+    # OK, change baud rate
+    # This gets an 8 bytes response
+    spec_baud ( BAUD_115200 )
+
+    ser.write ( cmd.encode('ascii') )
+    buf = ser.read_until ( "\r\n", 8 );
+    if len(buf) == 8 :
+        print ( "Init OK" )
+        return
+    print ( "Init fails" )
+
 
 
 # We get an 8 byte reply
@@ -110,10 +163,25 @@ def spec_ascii () :
     # We must encode to bytes
     ser.write ( cmd.encode('ascii') )
 
-    monitor ()
+    # This is odd -- we get both the echo and ACK
+    # even though each terminates with \r\n
+    buf = ser.read_until ( "\r\n", 8 );
+    if len(buf) != 8 :
+        print ( "Trouble in spec_ascii()" )
+    #print ( "Response gives us ", len(buf), " bytes" )
+    #print ( buf )
+    #print ( buf.decode('ascii') )
+    # monitor ()
 
-spec_ascii ()
+spec_init ()
+
+# print ( "Probe with ascii command" )
+# spec_ascii ()
+#print ( "Set baud to 115200" )
 spec_baud ( BAUD_115200 )
+#print ( "Done setting baud" )
+
+print ( "Probe with ascii command" )
 spec_ascii ()
 
 print ( "Done" )
