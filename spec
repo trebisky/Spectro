@@ -172,6 +172,20 @@ def spec_ascii () :
     #print ( buf.decode('ascii') )
     # monitor ()
 
+# An ascii spectrum file is 14336 bytes
+# This is 2048 * 7 (5 digits + "\r\n"
+# Must be upper case S
+# Takes about 3 seconds at 115200 baud
+def spec_scan () :
+    ser.write ( "S\n".encode('ascii') )
+    # discard the echo
+    buf = ser.read ( 3 )
+    # discard the ACK
+    buf = ser.read ( 5 )
+    image = ser.read_until ( "\r\n", 16000 )
+    #print ( image )
+    print ( len(image) )
+
 spec_init ()
 
 # print ( "Probe with ascii command" )
@@ -180,8 +194,11 @@ spec_init ()
 spec_baud ( BAUD_115200 )
 #print ( "Done setting baud" )
 
-print ( "Probe with ascii command" )
+print ( "Set ascii" )
 spec_ascii ()
+
+print ( "Scan" )
+spec_scan ()
 
 print ( "Done" )
 ser.close()
