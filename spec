@@ -253,8 +253,18 @@ def spec_bfix ( raw ) :
     print ( " bfix done ", len(out) )
     return out
 
+def spec_read1 () :
+        raw = ser.read ()
+        if len(raw) != 1 :
+            print ( "bscan2/read1 trouble :: ", len(raw) )
+        return raw[0]
+
 # Improved version of bscan.
 # Because the binary protocol does nothing to show us termination
+# We decode the bytes on the fly to know when to stop, thus avoiding
+# the penalty of a timeout.
+# I time 3 seconds to call this 10 times,
+#  so 0.3 seconds per scan
 def spec_bscan2 () :
     spec_binary ()
     ser.write ( "S\n".encode('ascii') )
@@ -264,10 +274,26 @@ def spec_bscan2 () :
     # discard the ACK
     buf = ser.read ( 5 )
 
-    raw_image = ser.read_until ( "\0", 16000 )
-    print ( raw_image )
-    print ( "Bytes in raw image: ", len(raw_image) )
-    return spec_bfix ( raw_image )
+    out = []
+    while ( True ) :
+        bb = spec_read1 ()
+        if bb == 128 :
+            b1 = spec_read1 ()
+            b2 = spec_read1 ()
+            val = (b1 << 8) + b2
+            #print ( " --- >> ", val )
+        else :
+            if bb > 127 :
+                bb = bb - 256
+            val += bb
+            #print ( bb, " >> ", val )
+        out.append ( val )
+        if len(out) > 2048 :
+            break
+
+    # XXX - here we delete the first item to get 2048
+    # but maybe we should delete the last??
+    return out[1:]
 
 # "scan" the spectrum, but read out in binary
 # Must be upper case S
@@ -324,6 +350,17 @@ spec_ascii ()
 print ( "Scan binary spectrum" )
 
 vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+vals = spec_bscan2 ()
+
+print ( "Zoot: ", len(vals) )
 spec_bsave ( save_path, vals )
 
 ser.close()
