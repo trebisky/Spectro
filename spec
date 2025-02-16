@@ -84,7 +84,6 @@ BAUD_2400 = 5
 BAUD_1200 = 6
 BAUD_600 = 7
 
-
 # We get the echo, then part of the ACK
 # received:  1 b'K' K
 # received:  1 b'2' 2
