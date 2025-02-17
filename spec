@@ -72,7 +72,7 @@ class Spectro () :
         print ( "Using port " + ser.name)
 
         ser.write ( "a\n".encode('ascii') )
-        buf = ser.read ( 8 );
+        buf = ser.read ( 8 )
 
         if len(buf) == 8 :
             print ( "init found device at 115200" )
@@ -91,7 +91,7 @@ class Spectro () :
         # It will timeout, but that is OK in init
         # and it only happens when the baud is wrong
         ser.write ( "a\n".encode('ascii') )
-        buf = ser.read ( 8 );
+        buf = ser.read ( 8 )
         #print ( "cleanup got ", len(buf) )
 
         # OK, change baud rate
@@ -100,12 +100,12 @@ class Spectro () :
         rate = BAUD_115200
         cmd = f"K{rate}\n"
         ser.write ( cmd.encode('ascii') )
-        buf = ser.read_until ( "\r\n", 9 );
+        buf = ser.read_until ( "\r\n", 9 )
         ser.baudrate = 115200
 
         # check again with the "a" command
         ser.write ( "a\n".encode('ascii') )
-        buf = ser.read ( 8 );
+        buf = ser.read ( 8 )
         if len(buf) == 8 :
             print ( "Init OK" )
             self.ser = ser
@@ -119,6 +119,9 @@ class Spectro () :
         print ( "Done" )
 
     # Tell the BTC100 to change baud rate
+    # (this is a bit of a cat and mouse game as we
+    #  must also change our baud rate to match)
+    #
     # K{int}: Set the baud rate
     # We always get the echo
     # We get only part of the ACK when the rate changes
@@ -129,7 +132,7 @@ class Spectro () :
 
         cmd = f"K{rate}\n"
         ser.write ( cmd.encode('ascii') )
-        buf = ser.read_until ( "\r\n", 9 );
+        buf = ser.read_until ( "\r\n", 9 )
         # We get 9 bytes if going from 9600 to 9600
         # We get 8 bytes when actually changing
         #print ( "Baud got ", len(buf) )
@@ -160,9 +163,25 @@ class Spectro () :
 
             print ( "received: ", len(reply), reply, areply )
 
-    # XXX - delete this
-    def get_ser ( self ) :
-        return self.ser
+    # Set how many spectra to average
+    def average ( self, val ) :
+        cmd = f"A{val}\n"
+        expect = len(cmd) + 1 + 5
+        self.ser.write ( cmd.encode('ascii') )
+        buf = self.ser.read_until ( "\r\n", expect )
+
+    # Set integration time in ms (50-65000)
+    def integ ( self, val ) :
+        cmd = f"I{val}\n"
+        expect = len(cmd) + 1 + 5
+        self.ser.write ( cmd.encode('ascii') )
+        buf = self.ser.read_until ( "\r\n", expect )
+
+    # reset the spectrometer (never used)
+    def reset ( self ) :
+        cmd = "Q\n"
+        self.ser.write ( cmd.encode('ascii') )
+        buf = self.ser.read_until ( "\r\n", 8 )
 
     # We get an 8 byte reply
     # 61 0d 0a 41 43 4b 0d 0a
@@ -177,12 +196,12 @@ class Spectro () :
         ser.write ( "a\n".encode('ascii') )
 
         # read echo
-        buf = ser.read_until ( term, 8 );
+        buf = ser.read_until ( term, 8 )
         if len(buf) != 3 :
             print ( "Trouble in spec_ascii() :: ", len(buf) )
 
         # read ACK
-        buf = ser.read_until ( term, 8 );
+        buf = ser.read_until ( term, 8 )
         if len(buf) != 5 :
             print ( "Trouble in spec_ascii() :: ", len(buf) )
 
@@ -195,7 +214,7 @@ class Spectro () :
         ser = self.ser
 
         ser.write ( "b\n".encode('ascii') )
-        buf = ser.read ( 8 );
+        buf = ser.read ( 8 )
         if len(buf) != 8 :
             print ( "Trouble in spec_binary()" )
 
@@ -238,7 +257,7 @@ class Spectro () :
     # I time 3 seconds to call this 10 times,
     #  so 0.3 seconds per scan
     def bscan ( self ) :
-        sef = self.ser
+        ser = self.ser
 
         self.binary ()
         ser.write ( "S\n".encode('ascii') )
@@ -308,7 +327,6 @@ class Spectro () :
 # ===============================================================================
 
 s = Spectro ()
-ser = s.get_ser ()
 
 #spec_init ()
 
@@ -325,7 +343,9 @@ s.ascii ()
 
 print ( "Scan binary spectrum" )
 
+s.average ( 10 )
 vals = s.bscan ()
+
 #vals = spec_bscan2 ()
 #vals = spec_bscan2 ()
 #vals = spec_bscan2 ()
