@@ -67,7 +67,15 @@ class Spectro () :
         baud = 115200
         TIMEOUT = 2
 
-        ser = serial.Serial ( device, baud, timeout=TIMEOUT )
+        try:
+            ser = serial.Serial ( device, baud, timeout=TIMEOUT )
+        except serial.SerialException as e:
+            print ( f"Cannot open serial port {device}: {e}")
+            exit ()
+        except FileNotFoundError as e:
+            print ( f"Cannot open serial port {device}: {e}")
+            exit ()
+
         print ( "Using port " + ser.name)
 
         ser.write ( "a\n".encode('ascii') )
