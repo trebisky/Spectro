@@ -8,6 +8,7 @@
 # B and W Tech Model BTC110-S spectrometer.
 
 import os
+import sys
 import serial
 
 save_path = "spectrum"
@@ -33,9 +34,6 @@ save_path = "spectrum"
 # Sending 'a' is the command to tell it to communicate in ascii.
 # It should respond with "ACK"
 # The 'A' command is different (it sets averaging)
-
-device = "/dev/ttyUSB0"
-TIMEOUT = 2
 
 # Baudrate codes for the BTC100 "K" command
 BAUD_115200 = 0
@@ -65,8 +63,9 @@ BAUD_600 = 7
 # means that you will wait for a timeout
 
 class Spectro () :
-    def __init__ ( self ) :
+    def __init__ ( self, device ) :
         baud = 115200
+        TIMEOUT = 2
 
         ser = serial.Serial ( device, baud, timeout=TIMEOUT )
         print ( "Using port " + ser.name)
@@ -326,7 +325,19 @@ class Spectro () :
 # ===============================================================================
 # ===============================================================================
 
-s = Spectro ()
+# on Windows 10, os.name returns "nt".
+#   on Linux it returns "posix"
+# on Windows 10, sys.platform returns "win32".
+#   on Linux it returns "linux"
+#print ( os.name )
+#print ( sys.platform )
+
+if ( sys.platform == "linux" ) :
+    spec_device = "/dev/ttyUSB0"
+else :
+    spec_device = "COM3"
+
+s = Spectro ( spec_device )
 
 #spec_init ()
 
