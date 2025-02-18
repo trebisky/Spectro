@@ -5,7 +5,7 @@
 # Tom Trebisky  2-13-2025
 #
 # A Python program to talk to the
-# B and W Tech Model BTC110-S spectrometer.
+# B and W Tech Model BTC100-S spectrometer.
 
 import os
 import sys
