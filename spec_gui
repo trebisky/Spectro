@@ -1,0 +1,54 @@
+#!/bin/python3
+
+# spec_gui
+#
+# Tom Trebisky  2-18-2025
+#
+# A Python program to talk to the
+# B and W Tech Model BTC100-S spectrometer.
+# a GUI program derived from "spec"
+
+import wx
+import os
+import sys
+import serial
+
+# Geometry for initial layout
+xsize = 800
+ysize = 600
+
+class Spec_Frame ( wx.Frame ) :
+
+        def __init__ ( self, parent, title ):
+            wsize = ( xsize, ysize )
+            top = wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
+
+
+class Spec_GUI ( wx.App ) :
+        def __init__ ( self ) :
+            wx.App.__init__(self)
+            frame = Spec_Frame ( None, "BTC-100-S2 control" )
+            self.SetTopWindow ( frame )
+            frame.Show ( True )
+
+# ===============================================================================
+# ===============================================================================
+
+# on Windows 10, os.name returns "nt".
+#   on Linux it returns "posix"
+# on Windows 10, sys.platform returns "win32".
+#   on Linux it returns "linux"
+#print ( os.name )
+#print ( sys.platform )
+
+if ( sys.platform == "linux" ) :
+    spec_device = "/dev/ttyUSB0"
+else :
+    spec_device = "COM3"
+
+# s = Spectro ( spec_device )
+
+app = Spec_GUI ()
+app.MainLoop ()
+
+# THE END
