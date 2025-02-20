@@ -13,15 +13,173 @@ import os
 import sys
 import serial
 
+#My most mature wx code is:
+#/u1/Projects/ESP8266/Projects/tmon/gui
+
 # Geometry for initial layout
 xsize = 800
 ysize = 600
+
+# The right side needs about 250 pixels
+right_size =250
+split_pos = xsize - right_size
+
+# The left panel has the graph
+#
+# The way all of this works is that Paint events put stuff
+# into the panel.  So you set up data to be plotted, then
+# call self.Refresh, and a Paint event will happen and something
+# should show up on the screen.
+class Left_Panel ( wx.Panel ) :
+        def __init__ ( self, parent, data ) :
+            wx.Panel.__init__ ( self, parent )
+
+            self.xy = None
+
+            #self.Bind ( wx.EVT_SIZE, self.onResize )
+            self.Bind ( wx.EVT_PAINT, self.OnPaint )
+
+        # So that we can handle paint events quickly,
+        # we have a prescaled set of points made up
+        # ahead of time
+        def plot_em ( self ) :
+            if not self.xy :
+                return
+
+            dc = wx.PaintDC ( self )
+            dc.SetPen ( wx.Pen(wx.BLUE, 2) )
+
+            lastxy = None
+
+            for xy in self.xy :
+                if xy and lastxy :
+                    dc.DrawLine ( lastxy[0], lastxy[1], xy[0], xy[1] )
+                lastxy = xy
+
+        # We get lots of paint events, for reasons I don't understand,
+        # and not simply related to cursor motion.
+        # It is out of my control and it all works.
+        # We just need to be ready to entirely redraw everything
+        # whenever one of these events transpires.
+        def OnPaint ( self, event ) :
+            print ( "left Paint!" )
+
+            dc = wx.PaintDC ( self )
+            dc.Clear ()
+
+            # We get black by default
+            dc.SetPen ( wx.Pen(wx.BLUE, 4) )
+
+            #if ( self.curpos ) :
+            #    self.mkVline ( self.curpos )
+
+            #w, h = self.GetSize()
+
+            # self.mkVline ( self.lmargin )
+
+            #dc.DrawLine ( lastxy[0], lastxy[1], xy[0], xy[1] )
+            dc.DrawLine ( 100, 100, 200, 200 )
+
+            #self.mtext ( 0, "140" )
+            #self.mtext ( 100, "140" )
+            #self.mtext ( 150, "140" )
+            #self.mtext ( 250, "140" )
+            # This is 164x19 pixels with a size 12 font
+            #self.mtext ( 300, "Marvin the Alligator" )
+            #self.mtext ( h-30, "140" )
+
+            dc.DrawText ( "Alligator", 50, 50 )
+
+            self.plot_em ()
+
+            #for (ii,ll) in self.ticks :
+            #    self.mtext ( ii, ll )
+
+            #self.mkHline ( self.height-1 )
+            #for ix in self.xticks :
+            #    self.xtick ( ix )
+
+        def mkdata ( self ) :
+            rv = []
+
+            rv.append ( (100,300) )
+            rv.append ( (200,350) )
+            rv.append ( (300,250) )
+            rv.append ( (400,380) )
+            self.xy = rv
+
+        def update ( self ) :
+            print ( "update Left" )
+            # trigger a repaint
+            self.Refresh ()
+
+# The right panel has controls
+class Right_Panel ( wx.Panel ) :
+        def __init__ ( self, parent, data, left ) :
+            wx.Panel.__init__ ( self, parent )
+
+            self.left = left
+
+            rsz = wx.BoxSizer ( wx.VERTICAL )
+            self.SetSizer ( rsz )
+
+            # Add two buttons
+            bup = wx.Panel ( self, -1 )
+            self.b_up = wx.Button ( bup, wx.ID_ANY, "Update")
+            self.b_up.Bind ( wx.EVT_BUTTON, self.onUpdate )
+            self.b_ex = wx.Button ( bup, wx.ID_ANY, "Exit")
+            self.b_ex.Bind ( wx.EVT_BUTTON, self.onExit )
+            bus = wx.BoxSizer ( wx.HORIZONTAL )
+            bus.Add ( self.b_up, 1, wx.EXPAND )
+            bus.Add ( self.b_ex, 1, wx.EXPAND )
+            bup.SetSizer ( bus )
+
+            rsz.Add ( bup, 1, wx.EXPAND )
+
+        def onExit ( self, event ) :
+            print ( "Time for me to exit" )
+            sys.exit ()
+
+        def onUpdate ( self, event ) :
+            print ( "Update button was pushed" )
+            self.left.mkdata ()
+            self.update ()
+            self.left.update ()
+
+        def update ( self ) :
+            print ( "update Right" )
+
+# The timer goes off once per second
+timer_delay = 1000    # milliseconds
 
 class Spec_Frame ( wx.Frame ) :
 
         def __init__ ( self, parent, title ):
             wsize = ( xsize, ysize )
             top = wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
+
+            splitter = wx.SplitterWindow(self, style = wx.SP_LIVE_UPDATE)
+
+            data = None
+
+            self.lpanel = Left_Panel ( splitter, data )
+            self.rpanel = Right_Panel ( splitter, data, self.lpanel )
+
+            # only left side grows
+            splitter.SetSashGravity ( 1.0 )
+
+            splitter.SetMinimumPaneSize ( right_size )
+            splitter.SplitVertically ( self.lpanel, self.rpanel )
+            splitter.SetSashPosition ( split_pos, True )
+
+            self.timer = wx.Timer ( self )
+            self.Bind ( wx.EVT_TIMER, self.timer_update, self.timer )
+            self.timer.Start ( timer_delay )
+
+        # Called at 1 Hz
+        def timer_update ( self, event ) :
+            #print ( "Tick" )
+            pass
 
 
 class Spec_GUI ( wx.App ) :
