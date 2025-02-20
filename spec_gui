@@ -11,7 +11,8 @@
 import wx
 import os
 import sys
-import serial
+
+from Spectro import *
 
 #My most mature wx code is:
 #/u1/Projects/ESP8266/Projects/tmon/gui
@@ -31,13 +32,37 @@ split_pos = xsize - right_size
 # call self.Refresh, and a Paint event will happen and something
 # should show up on the screen.
 class Left_Panel ( wx.Panel ) :
-        def __init__ ( self, parent, data ) :
+        def __init__ ( self, parent ) :
             wx.Panel.__init__ ( self, parent )
 
+            self.width = None
+            self.height = None
             self.xy = None
 
-            #self.Bind ( wx.EVT_SIZE, self.onResize )
+            self.data = Spec_Data ()
+
+            self.Bind ( wx.EVT_SIZE, self.onResize )
             self.Bind ( wx.EVT_PAINT, self.OnPaint )
+
+        # We get 3 resize events just starting up.
+        # we need this to refresh after resize
+        # also to post width for Move checks
+        def onResize ( self, event ) :
+            #print ( "resize" )
+            self.width = event.Size.width
+            self.height = event.Size.height
+
+            #xsize = self.width-self.lmargin
+            #ysize = self.height - self.ymargin * 2
+            #self.data.viewport ( self.lmargin, self.ymargin, xsize, ysize )
+
+            xsize = self.width
+            ysize = self.height
+            self.data.viewport ( 0, 0, xsize, ysize )
+
+            print ( "width, height", self.width, "", self.height )
+
+            self.update ();
 
         # So that we can handle paint events quickly,
         # we have a prescaled set of points made up
@@ -62,7 +87,7 @@ class Left_Panel ( wx.Panel ) :
         # We just need to be ready to entirely redraw everything
         # whenever one of these events transpires.
         def OnPaint ( self, event ) :
-            print ( "left Paint!" )
+            #print ( "left Paint!" )
 
             dc = wx.PaintDC ( self )
             dc.Clear ()
@@ -78,7 +103,7 @@ class Left_Panel ( wx.Panel ) :
             # self.mkVline ( self.lmargin )
 
             #dc.DrawLine ( lastxy[0], lastxy[1], xy[0], xy[1] )
-            dc.DrawLine ( 100, 100, 200, 200 )
+            #dc.DrawLine ( 100, 100, 200, 200 )
 
             #self.mtext ( 0, "140" )
             #self.mtext ( 100, "140" )
@@ -87,8 +112,7 @@ class Left_Panel ( wx.Panel ) :
             # This is 164x19 pixels with a size 12 font
             #self.mtext ( 300, "Marvin the Alligator" )
             #self.mtext ( h-30, "140" )
-
-            dc.DrawText ( "Alligator", 50, 50 )
+            #dc.DrawText ( "Alligator", 50, 50 )
 
             self.plot_em ()
 
@@ -108,10 +132,64 @@ class Left_Panel ( wx.Panel ) :
             rv.append ( (400,380) )
             self.xy = rv
 
+        # This gets called when we have data fresh
+        # from the spectrometer
+        def new_data ( self, vals ) :
+            self.data.update ( vals )
+            self.xy = self.data.get_xy ()
+            print ( "XY has points: ", len(self.xy) )
+            print ( self.xy[0] )
+            print ( self.xy[1000] )
+            print ( self.xy[2000] )
+            self.update ()
+
         def update ( self ) :
             print ( "update Left" )
             # trigger a repaint
             self.Refresh ()
+
+class Spec_Data () :
+        def __init__ ( self ) :
+            self.raw = None
+
+        def minmax ( self ) :
+            min = self.raw[0]
+            max = self.raw[0]
+            for v in self.raw :
+                if v < min :
+                    min = v
+                if v > max :
+                    max = v
+            self.min = min
+            self.max = max
+
+        # New data arrived
+        def update ( self, vals ) :
+            self.raw = vals
+            self.minmax ()
+            print ( "min, max = ", self.min, " ", self.max )
+
+        def get_xy ( self ) :
+            rv = []
+            index = 0
+            num = len(self.raw)
+            ywid = self.max - self.min
+            for v in self.raw :
+                x = int ( (index * self.xsize) / num )
+                #y = int ( ((v - self.min) * self.ysize) / ywid )
+                y = int ( ((self.max - v) * self.ysize) / ywid )
+                rv.append ( (x,y) )
+                index += 1
+            return rv
+
+        # Called by resize events
+        # This is how I keep this object informed
+        # about things the left panel knows about
+        def viewport ( self, xoff, yoff, xsize, ysize ) :
+            self.xoff = xoff
+            self.yoff = yoff
+            self.xsize = xsize
+            self.ysize = ysize
 
 # The right panel has controls
 class Right_Panel ( wx.Panel ) :
@@ -120,29 +198,66 @@ class Right_Panel ( wx.Panel ) :
 
             self.left = left
 
+            self.spec = self.initSpectrometer ()
+
             rsz = wx.BoxSizer ( wx.VERTICAL )
             self.SetSizer ( rsz )
 
-            # Add two buttons
+            # Add buttons
             bup = wx.Panel ( self, -1 )
             self.b_up = wx.Button ( bup, wx.ID_ANY, "Update")
             self.b_up.Bind ( wx.EVT_BUTTON, self.onUpdate )
+
+            self.b_rd = wx.Button ( bup, wx.ID_ANY, "Read")
+            self.b_rd.Bind ( wx.EVT_BUTTON, self.onRead )
+
             self.b_ex = wx.Button ( bup, wx.ID_ANY, "Exit")
             self.b_ex.Bind ( wx.EVT_BUTTON, self.onExit )
+
             bus = wx.BoxSizer ( wx.HORIZONTAL )
             bus.Add ( self.b_up, 1, wx.EXPAND )
+            bus.Add ( self.b_rd, 1, wx.EXPAND )
             bus.Add ( self.b_ex, 1, wx.EXPAND )
             bup.SetSizer ( bus )
 
             rsz.Add ( bup, 1, wx.EXPAND )
 
+        # on Windows 10, os.name returns "nt".
+        #   on Linux it returns "posix"
+        # on Windows 10, sys.platform returns "win32".
+        #   on Linux it returns "linux"
+        #print ( os.name )
+        #print ( sys.platform )
+        def initSpectrometer ( self ) :
+            print ( "init spectrometer" )
+
+            if ( sys.platform == "linux" ) :
+                spec_device = "/dev/ttyUSB0"
+            else :
+                spec_device = "COM3"
+
+            return Spectro ( spec_device )
+
         def onExit ( self, event ) :
             print ( "Time for me to exit" )
+            self.spec.finish ()
             sys.exit ()
+
+        def new_scan ( self ) :
+            #self.spec.average ( 10 )
+            #self.spec.average ( 1 )
+            self.spec.average ( 2 )
+            vals = self.spec.bscan ()
+            #print ( "Scan yielded : ", len(vals), " values" )
+            self.left.new_data ( vals )
+
+        def onRead ( self, event ) :
+            #print ( "Time for me to read" )
+            self.new_scan ()
 
         def onUpdate ( self, event ) :
             print ( "Update button was pushed" )
-            self.left.mkdata ()
+            #self.left.mkdata ()
             self.update ()
             self.left.update ()
 
@@ -162,7 +277,7 @@ class Spec_Frame ( wx.Frame ) :
 
             data = None
 
-            self.lpanel = Left_Panel ( splitter, data )
+            self.lpanel = Left_Panel ( splitter )
             self.rpanel = Right_Panel ( splitter, data, self.lpanel )
 
             # only left side grows
@@ -179,32 +294,18 @@ class Spec_Frame ( wx.Frame ) :
         # Called at 1 Hz
         def timer_update ( self, event ) :
             #print ( "Tick" )
-            pass
+            self.rpanel.new_scan ()
 
 
 class Spec_GUI ( wx.App ) :
         def __init__ ( self ) :
             wx.App.__init__(self)
-            frame = Spec_Frame ( None, "BTC-100-S2 control" )
+            frame = Spec_Frame ( self, "BTC-100-S2 control" )
             self.SetTopWindow ( frame )
             frame.Show ( True )
 
 # ===============================================================================
 # ===============================================================================
-
-# on Windows 10, os.name returns "nt".
-#   on Linux it returns "posix"
-# on Windows 10, sys.platform returns "win32".
-#   on Linux it returns "linux"
-#print ( os.name )
-#print ( sys.platform )
-
-if ( sys.platform == "linux" ) :
-    spec_device = "/dev/ttyUSB0"
-else :
-    spec_device = "COM3"
-
-# s = Spectro ( spec_device )
 
 app = Spec_GUI ()
 app.MainLoop ()
