@@ -17,14 +17,6 @@ from Spectro import *
 #My most mature wx code is:
 #/u1/Projects/ESP8266/Projects/tmon/gui
 
-# Geometry for initial layout
-xsize = 800
-ysize = 600
-
-# The right side needs about 250 pixels
-right_size =250
-split_pos = xsize - right_size
-
 # The left panel has the graph
 #
 # The way all of this works is that Paint events put stuff
@@ -202,6 +194,9 @@ class Spec_Data () :
             self.xsize = xsize
             self.ysize = ysize
 
+# The timer goes off once per second
+timer_delay = 1000    # milliseconds
+
 # The right panel has controls
 class Right_Panel ( wx.Panel ) :
         def __init__ ( self, parent, data, left ) :
@@ -211,13 +206,26 @@ class Right_Panel ( wx.Panel ) :
             self.left = left
 
             self.spec = self.initSpectrometer ()
+            if self.spec == None :
+                print ( "Lost at Sea" )
+                exit ()
+
+            self.auto_run = True
+
+            self.timer = wx.Timer ( self )
+            self.Bind ( wx.EVT_TIMER, self.timer_update, self.timer )
+            self.timer.Start ( timer_delay )
+
+            # ------------------------------
+            # ------------------------------
+            # Lay out the right side GUI
 
             sz_main = wx.BoxSizer ( wx.VERTICAL )
             self.SetSizer ( sz_main )
 
             # ------------------------------
             self.data.auto ()
-            # on/off switch for auto.
+            # on/off switch for auto scaling
             # a Radio button will do for now, but I would much
             # prefer a slider switch
             p_auto = wx.Panel ( self, -1 )
@@ -237,7 +245,49 @@ class Right_Panel ( wx.Panel ) :
 
             sz_main.Add ( p_auto, 1, wx.EXPAND )
 
-            self.Bind ( wx.EVT_RADIOBUTTON, self.onRadio )
+            p_auto.Bind ( wx.EVT_RADIOBUTTON, self.onAuto )
+
+            # ------------------------------
+            self.auto_run = True
+
+            # on/off switch for auto run
+            p_run = wx.Panel ( self, -1 )
+
+            # This yields a simple button that turns "grey" when on.
+            # Too subtle for my taste
+            #b_run = wx.ToggleButton ( self, wx.ID_ANY, "Auto" )
+            #sz_main.Add ( b_run, 1, wx.EXPAND )
+
+            b_run1 = wx.RadioButton ( p_run, 1, label="Run" )
+            b_run2 = wx.RadioButton ( p_run, 2, label="Single" )
+
+            sz_run = wx.BoxSizer ( wx.HORIZONTAL )
+            sz_run.Add ( b_run1, 1, wx.EXPAND )
+            sz_run.Add ( b_run2, 1, wx.EXPAND )
+            p_run.SetSizer ( sz_run )
+
+            sz_main.Add ( p_run, 1, wx.EXPAND )
+
+            p_run.Bind ( wx.EVT_RADIOBUTTON, self.onRun )
+
+            # ------------------------------
+            # place to enter averaging
+            p_avg = wx.Panel ( self, -1 )
+
+            val = self.spec.get_average ()
+            lab = f"Averaging: {val}   "
+            self.avg_label = wx.StaticText ( p_avg, label=lab )
+            self.avg_edit= wx.TextCtrl ( p_avg, size=(140, -1))
+            but = wx.Button ( p_avg, label="Set")
+            but.Bind ( wx.EVT_BUTTON, self.onAveraging )
+
+            sz_avg = wx.BoxSizer ( wx.HORIZONTAL )
+            sz_avg.Add ( self.avg_label, 1, wx.EXPAND )
+            sz_avg.Add ( self.avg_edit, 1, wx.EXPAND )
+            sz_avg.Add ( but, 1, wx.EXPAND )
+            p_avg.SetSizer ( sz_avg )
+
+            sz_main.Add ( p_avg, 1, wx.EXPAND )
 
             # ------------------------------
             # place to enter integration time
@@ -263,8 +313,8 @@ class Right_Panel ( wx.Panel ) :
             # These may eventually move to a top menu
             # especially Exit
             p_ctrl = wx.Panel ( self, -1 )
-            self.b_up = wx.Button ( p_ctrl, wx.ID_ANY, "Update")
-            self.b_up.Bind ( wx.EVT_BUTTON, self.onUpdate )
+            self.b_up = wx.Button ( p_ctrl, wx.ID_ANY, "Recover")
+            self.b_up.Bind ( wx.EVT_BUTTON, self.onRecover )
 
             self.b_rd = wx.Button ( p_ctrl, wx.ID_ANY, "Read")
             self.b_rd.Bind ( wx.EVT_BUTTON, self.onRead )
@@ -296,17 +346,41 @@ class Right_Panel ( wx.Panel ) :
 
             return Spectro ( spec_device )
 
+        # Button click to set averaging
+        def onAveraging ( self, event ) :
+            val = self.avg_edit.GetValue ()
+            lab = f"Averaging: {val}"
+            ival = int(val)
+            if self.auto_run and ival > 4 :
+                print ( "Too much averaging while free running" )
+                return
+            self.avg_label.SetLabel ( lab )
+            self.spec.set_average ( ival )
+
         # Button click to set integration time
         def onInteg ( self, event ) :
             val = self.integ_edit.GetValue ()
             lab = f"Gain: {val}"
+            ival = int(val)
+            if self.auto_run and ival > 500 :
+                print ( "Integ too long while free running" )
+                return
             self.integ_label.SetLabel ( lab )
-            self.spec.set_integ ( int(val) )
+            self.spec.set_integ ( ival )
 
-        def onRadio ( self, event ) :
+        def onRun ( self, event ) :
             rb = event.GetEventObject ()
             lab = rb.GetLabel ()
-            print ( "Radio EVENT ****************** ", lab )
+            print ( "Radio Run EVENT ****************** ", lab )
+            if lab.startswith ( 'Ru' ) :
+                self.auto_run = True
+            else :
+                self.auto_run = False
+
+        def onAuto ( self, event ) :
+            rb = event.GetEventObject ()
+            lab = rb.GetLabel ()
+            print ( "Radio Auto EVENT ****************** ", lab )
             #val = rb.GetValue ()    # is always true
             if lab.startswith ( 'Au' ) :
                 self.data.auto ()
@@ -319,36 +393,48 @@ class Right_Panel ( wx.Panel ) :
             sys.exit ()
 
         def new_scan ( self ) :
-            #self.spec.average ( 10 )
-            #self.spec.average ( 1 )
-            self.spec.average ( 2 )
             vals = self.spec.bscan ()
-            if len(vals) == 2048 :
-                self.left.new_data ( vals )
-            else :
-                print ( "Scan yielded : ", len(vals), " values" )
+            if vals == None or len(vals) != 2048 :
+                if vals != None :
+                    print ( "Scan yielded : ", len(vals), " values" )
                 print ( "Graph update skipped" )
+            else :
+                self.left.new_data ( vals )
 
+        # Used to capture single scans
         def onRead ( self, event ) :
             #print ( "Time for me to read" )
-            self.new_scan ()
+            if not self.auto_run :
+                self.new_scan ()
 
-        # Basically useless now
-        def onUpdate ( self, event ) :
-            print ( "Update button was pushed" )
-            #self.left.mkdata ()
-            self.update ()
-            self.left.update ()
+        # Used when weird things happen
+        def onRecover ( self, event ) :
+            print ( "Recover button was pushed" )
+            #self.auto_run = False
+            self.spec.finish ()
+            self.spec = self.initSpectrometer ()
+
+        # Called at 1 Hz
+        def timer_update ( self, event ) :
+            #print ( "Tick" )
+            if self.auto_run :
+                self.new_scan ()
 
         def update ( self ) :
             print ( "update Right" )
 
-# The timer goes off once per second
-timer_delay = 1000    # milliseconds
+# Geometry for initial layout
+xsize = 1000
+ysize = 600
+
+right_size =300
 
 class Spec_Frame ( wx.Frame ) :
 
         def __init__ ( self, parent, title ):
+            # The right side needs about 250 pixels
+            split_pos = xsize - right_size
+
             wsize = ( xsize, ysize )
             top = wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
 
@@ -365,16 +451,6 @@ class Spec_Frame ( wx.Frame ) :
             splitter.SetMinimumPaneSize ( right_size )
             splitter.SplitVertically ( self.lpanel, self.rpanel )
             splitter.SetSashPosition ( split_pos, True )
-
-            self.timer = wx.Timer ( self )
-            self.Bind ( wx.EVT_TIMER, self.timer_update, self.timer )
-            self.timer.Start ( timer_delay )
-
-        # Called at 1 Hz
-        def timer_update ( self, event ) :
-            #print ( "Tick" )
-            self.rpanel.new_scan ()
-
 
 class Spec_GUI ( wx.App ) :
         def __init__ ( self ) :

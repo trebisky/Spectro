@@ -6,6 +6,7 @@
 # B and W Tech Model BTC100-S spectrometer.
 
 import serial
+import time
 
 save_path = "spectrum"
 
@@ -29,6 +30,9 @@ BAUD_2400 = 5
 BAUD_1200 = 6
 BAUD_600 = 7
 
+class SpectroError ( Exception ) :
+    pass
+
 # At one time I was having trouble getting Python to
 # set up the serial port baud rate correctly, but I was
 # able to run picocom to set up the port, then inherit
@@ -48,19 +52,30 @@ BAUD_600 = 7
 
 class Spectro () :
     def __init__ ( self, device ) :
+
+        self.ser = self.connect ( device )
+        if self.ser == None :
+            print ( "Init fails" )
+            return None
+
+        self.average ( 1 )
+        self.average_val = 1
+
+        self.integ ( 50 )
+        self.integ_val = 50
+
+    def connect ( self, device ) :
         baud = 115200
         TIMEOUT = 2
-
-        self.integ_val = 50
 
         try:
             ser = serial.Serial ( device, baud, timeout=TIMEOUT )
         except serial.SerialException as e:
             print ( f"Cannot open serial port {device}: {e}")
-            exit ()
+            return None
         except FileNotFoundError as e:
             print ( f"Cannot open serial port {device}: {e}")
-            exit ()
+            return None
 
         print ( "Using port " + ser.name)
 
@@ -70,8 +85,7 @@ class Spectro () :
         if len(buf) == 8 :
             print ( "init found device at 115200" )
             print ( "Init OK" )
-            self.ser = ser
-            return
+            return ser
 
         print ( "Init trouble, probably at 9600 :: ", len(buf) )
 
@@ -101,11 +115,9 @@ class Spectro () :
         buf = ser.read ( 8 )
         if len(buf) == 8 :
             print ( "Init OK" )
-            self.ser = ser
-            return
+            return ser
 
-        self.ser = None
-        print ( "Init fails" )
+        return None
 
     def finish ( self ) :
         self.ser.close()
@@ -121,6 +133,13 @@ class Spectro () :
 
     def get_integ ( self ) :
         return self.integ_val
+
+    def set_average ( self, val ) :
+        self.average_val = val
+        self.average ( val )
+
+    def get_average ( self ) :
+        return self.average_val
 
     # Tell the BTC100 to change baud rate
     # (this is a bit of a cat and mouse game as we
@@ -170,6 +189,7 @@ class Spectro () :
     # Set how many spectra to average
     def average ( self, val ) :
         cmd = f"A{val}\n"
+        #print ( "set averaging: ", cmd )
         expect = len(cmd) + 1 + 5
         self.ser.write ( cmd.encode('ascii') )
         buf = self.ser.read_until ( "\r\n", expect )
@@ -177,6 +197,7 @@ class Spectro () :
     # Set integration time in ms (50-65000)
     def integ ( self, val ) :
         cmd = f"I{val}\n"
+        #print ( "set integ: ", cmd )
         expect = len(cmd) + 1 + 5
         self.ser.write ( cmd.encode('ascii') )
         buf = self.ser.read_until ( "\r\n", expect )
@@ -237,8 +258,13 @@ class Spectro () :
 
     def read1 ( self ) :
         raw = self.ser.read ()
+        if raw == None :
+            print ( "bscan/read1 trouble A" )
+            raise SpectroError ( "bscan2/read1" )
         if len(raw) != 1 :
-            print ( "bscan2/read1 trouble :: ", len(raw) )
+            print ( "bscan/read1 trouble B :: ", len(raw) )
+            raise SpectroError ( "bscan2/read1" )
+
         return raw[0]
 
     # "scan" the spectrum, but read out in binary
@@ -260,8 +286,19 @@ class Spectro () :
     # the penalty of a timeout.
     # I time 3 seconds to call this 10 times,
     #  so 0.3 seconds per scan
+
+    # 2-21-2025  I was having trouble when I set averaging and/or
+    # integration values too high.  The issue is that the serial read
+    # times out waiting for the data to start.  So a delay is in
+    # order before we expect data.
+
     def bscan ( self ) :
         ser = self.ser
+
+        # Python sleep allows floats
+        my_delay = (3 * self.average_val * self.integ_val) / (10 * 50)
+        if my_delay > 1.0 :
+            time.sleep ( my_delay )
 
         self.binary ()
         ser.write ( "S\n".encode('ascii') )
@@ -271,23 +308,29 @@ class Spectro () :
         # discard the ACK
         buf = ser.read ( 5 )
 
-        out = []
-        while ( True ) :
-            bb = self.read1 ()
-            if bb == 128 :
-                b1 = self.read1 ()
-                b2 = self.read1 ()
-                val = (b1 << 8) + b2
-                #print ( " --- >> ", val )
-            else :
-                if bb > 127 :
-                    bb = bb - 256
-                val += bb
-                #print ( bb, " >> ", val )
-            out.append ( val )
-            if len(out) > 2048 :
-                break
+        # Covers weird cases
+        val = 0
 
+        try:
+            out = []
+            while ( True ) :
+                bb = self.read1 ()
+                if bb == 128 :
+                    b1 = self.read1 ()
+                    b2 = self.read1 ()
+                    val = (b1 << 8) + b2
+                    #print ( " --- >> ", val )
+                else :
+                    if bb > 127 :
+                        bb = bb - 256
+                    val += bb
+                    #print ( bb, " >> ", val )
+                out.append ( val )
+                if len(out) > 2048 :
+                    break
+        except SpectroError as e:
+            return None
+        
         # XXX - here we delete the first item to get 2048
         # but maybe we should delete the last??
         return out[1:]
