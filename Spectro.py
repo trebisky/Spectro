@@ -51,6 +51,8 @@ class Spectro () :
         baud = 115200
         TIMEOUT = 2
 
+        self.integ_val = 50
+
         try:
             ser = serial.Serial ( device, baud, timeout=TIMEOUT )
         except serial.SerialException as e:
@@ -108,6 +110,17 @@ class Spectro () :
     def finish ( self ) :
         self.ser.close()
         print ( "Done" )
+
+    def set_integ ( self, val ) :
+        if val < 50 :
+            val = 50
+        if val > 65000 :
+            val = 65000
+        self.integ_val = val
+        self.integ ( val )
+
+    def get_integ ( self ) :
+        return self.integ_val
 
     # Tell the BTC100 to change baud rate
     # (this is a bit of a cat and mouse game as we

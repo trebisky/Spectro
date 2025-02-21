@@ -175,7 +175,7 @@ class Spec_Data () :
         def update ( self, vals ) :
             self.raw = vals
             self.minmax ()
-            #print ( "min, max = ", self.min, " ", self.max )
+            print ( "New data: min, max = ", self.min, " ", self.max )
 
         def get_xy ( self ) :
             rv = []
@@ -240,6 +240,25 @@ class Right_Panel ( wx.Panel ) :
             self.Bind ( wx.EVT_RADIOBUTTON, self.onRadio )
 
             # ------------------------------
+            # place to enter integration time
+            p_integ = wx.Panel ( self, -1 )
+
+            val = self.spec.get_integ ()
+            lab = f"Gain: {val}   "
+            self.integ_label = wx.StaticText ( p_integ, label=lab )
+            self.integ_edit= wx.TextCtrl ( p_integ, size=(140, -1))
+            but = wx.Button ( p_integ, label="Set")
+            but.Bind ( wx.EVT_BUTTON, self.onInteg )
+
+            sz_integ = wx.BoxSizer ( wx.HORIZONTAL )
+            sz_integ.Add ( self.integ_label, 1, wx.EXPAND )
+            sz_integ.Add ( self.integ_edit, 1, wx.EXPAND )
+            sz_integ.Add ( but, 1, wx.EXPAND )
+            p_integ.SetSizer ( sz_integ )
+
+            sz_main.Add ( p_integ, 1, wx.EXPAND )
+
+            # ------------------------------
             # Add main control buttons
             # These may eventually move to a top menu
             # especially Exit
@@ -277,6 +296,13 @@ class Right_Panel ( wx.Panel ) :
 
             return Spectro ( spec_device )
 
+        # Button click to set integration time
+        def onInteg ( self, event ) :
+            val = self.integ_edit.GetValue ()
+            lab = f"Gain: {val}"
+            self.integ_label.SetLabel ( lab )
+            self.spec.set_integ ( int(val) )
+
         def onRadio ( self, event ) :
             rb = event.GetEventObject ()
             lab = rb.GetLabel ()
@@ -297,8 +323,11 @@ class Right_Panel ( wx.Panel ) :
             #self.spec.average ( 1 )
             self.spec.average ( 2 )
             vals = self.spec.bscan ()
-            #print ( "Scan yielded : ", len(vals), " values" )
-            self.left.new_data ( vals )
+            if len(vals) == 2048 :
+                self.left.new_data ( vals )
+            else :
+                print ( "Scan yielded : ", len(vals), " values" )
+                print ( "Graph update skipped" )
 
         def onRead ( self, event ) :
             #print ( "Time for me to read" )
