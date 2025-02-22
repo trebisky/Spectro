@@ -334,13 +334,13 @@ class Right_Panel ( wx.Panel ) :
             self.b_rd = wx.Button ( p_ctrl, wx.ID_ANY, "Read")
             self.b_rd.Bind ( wx.EVT_BUTTON, self.onRead )
 
-            self.b_ex = wx.Button ( p_ctrl, wx.ID_ANY, "Exit")
-            self.b_ex.Bind ( wx.EVT_BUTTON, self.onExit )
+            #self.b_ex = wx.Button ( p_ctrl, wx.ID_ANY, "Exit")
+            #self.b_ex.Bind ( wx.EVT_BUTTON, self.onExit )
 
             sz_ctrl = wx.BoxSizer ( wx.HORIZONTAL )
             sz_ctrl.Add ( self.b_up, 1, wx.EXPAND )
             sz_ctrl.Add ( self.b_rd, 1, wx.EXPAND )
-            sz_ctrl.Add ( self.b_ex, 1, wx.EXPAND )
+            #sz_ctrl.Add ( self.b_ex, 1, wx.EXPAND )
             p_ctrl.SetSizer ( sz_ctrl )
 
             #sz_main.Add ( p_ctrl, 1, wx.EXPAND )
@@ -402,11 +402,14 @@ class Right_Panel ( wx.Panel ) :
                 self.data.auto ()
             else :
                 self.data.fixed ()
-
-        def onExit ( self, event ) :
+                    
+        def doExit ( self ) :
             print ( "Time for me to exit" )
             self.spec.finish ()
-            sys.exit ()
+
+        #def onExit ( self, event ) :
+        #    self.doExit ()
+        #    sys.exit ()
 
         def new_scan ( self ) :
             if self.busy :
@@ -457,7 +460,17 @@ class Spec_Frame ( wx.Frame ) :
             split_pos = xsize - right_size
 
             wsize = ( xsize, ysize )
-            top = wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
+            #top = wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
+            wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
+
+            menubar = wx.MenuBar ()
+            filemenu = wx.Menu ()
+            filemenu.Append ( 101, "Save", "Save" )
+            filemenu.Append ( wx.ID_EXIT, "Exit", "Exit" )
+            menubar.Append ( filemenu, 'File' )
+            self.SetMenuBar ( menubar )
+
+            menubar.Bind ( wx.EVT_MENU, self.onMenu )
 
             splitter = wx.SplitterWindow(self, style = wx.SP_LIVE_UPDATE)
 
@@ -472,6 +485,16 @@ class Spec_Frame ( wx.Frame ) :
             splitter.SetMinimumPaneSize ( right_size )
             splitter.SplitVertically ( self.lpanel, self.rpanel )
             splitter.SetSashPosition ( split_pos, True )
+
+        def onMenu ( self, event ) :
+            id = event.GetId ()
+            print ( "Event ", id )
+            if id == 101 :
+                print ( "Save" )
+                return
+            if id == wx.ID_EXIT :
+                self.rpanel.doExit ()
+                exit ()
 
 class Spec_GUI ( wx.App ) :
         def __init__ ( self ) :
