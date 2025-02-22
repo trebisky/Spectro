@@ -211,6 +211,7 @@ class Right_Panel ( wx.Panel ) :
                 exit ()
 
             self.auto_run = True
+            self.busy = False
 
             self.timer = wx.Timer ( self )
             self.Bind ( wx.EVT_TIMER, self.timer_update, self.timer )
@@ -239,11 +240,14 @@ class Right_Panel ( wx.Panel ) :
             b_auto2 = wx.RadioButton ( p_auto, 2, label="Fixed" )
 
             sz_auto = wx.BoxSizer ( wx.HORIZONTAL )
-            sz_auto.Add ( b_auto1, 1, wx.EXPAND )
-            sz_auto.Add ( b_auto2, 1, wx.EXPAND )
+            #sz_auto.Add ( b_auto1, 1, wx.EXPAND )
+            #sz_auto.Add ( b_auto2, 1, wx.EXPAND )
+            sz_auto.Add ( b_auto1, 0, 0, 0 )
+            sz_auto.Add ( b_auto2, 0, 0, 0 )
             p_auto.SetSizer ( sz_auto )
 
-            sz_main.Add ( p_auto, 1, wx.EXPAND )
+            #sz_main.Add ( p_auto, 1, wx.EXPAND )
+            sz_main.Add ( p_auto, 0, 0, 0 )
 
             p_auto.Bind ( wx.EVT_RADIOBUTTON, self.onAuto )
 
@@ -262,11 +266,12 @@ class Right_Panel ( wx.Panel ) :
             b_run2 = wx.RadioButton ( p_run, 2, label="Single" )
 
             sz_run = wx.BoxSizer ( wx.HORIZONTAL )
-            sz_run.Add ( b_run1, 1, wx.EXPAND )
-            sz_run.Add ( b_run2, 1, wx.EXPAND )
+            sz_run.Add ( b_run1, 0, 0, 0 )
+            sz_run.Add ( b_run2, 0, 0, 0 )
             p_run.SetSizer ( sz_run )
 
-            sz_main.Add ( p_run, 1, wx.EXPAND )
+            #sz_main.Add ( p_run, 1, wx.EXPAND )
+            sz_main.Add ( p_run, 0, 0, 0 )
 
             p_run.Bind ( wx.EVT_RADIOBUTTON, self.onRun )
 
@@ -277,17 +282,19 @@ class Right_Panel ( wx.Panel ) :
             val = self.spec.get_average ()
             lab = f"Averaging: {val}   "
             self.avg_label = wx.StaticText ( p_avg, label=lab )
-            self.avg_edit= wx.TextCtrl ( p_avg, size=(140, -1))
-            but = wx.Button ( p_avg, label="Set")
-            but.Bind ( wx.EVT_BUTTON, self.onAveraging )
+            self.avg_edit = wx.TextCtrl ( p_avg, size=(140, -1), style=wx.TE_PROCESS_ENTER )
+            self.avg_edit.Bind ( wx.EVT_TEXT_ENTER, self.onAveraging )
+            #but = wx.Button ( p_avg, label="Set")
+            #but.Bind ( wx.EVT_BUTTON, self.onAveraging )
 
             sz_avg = wx.BoxSizer ( wx.HORIZONTAL )
             sz_avg.Add ( self.avg_label, 1, wx.EXPAND )
             sz_avg.Add ( self.avg_edit, 1, wx.EXPAND )
-            sz_avg.Add ( but, 1, wx.EXPAND )
+            #sz_avg.Add ( but, 1, wx.EXPAND )
             p_avg.SetSizer ( sz_avg )
 
-            sz_main.Add ( p_avg, 1, wx.EXPAND )
+            #sz_main.Add ( p_avg, 1, wx.EXPAND )
+            sz_main.Add ( p_avg, 0, 0, 0 )
 
             # ------------------------------
             # place to enter integration time
@@ -296,17 +303,25 @@ class Right_Panel ( wx.Panel ) :
             val = self.spec.get_integ ()
             lab = f"Gain: {val}   "
             self.integ_label = wx.StaticText ( p_integ, label=lab )
-            self.integ_edit= wx.TextCtrl ( p_integ, size=(140, -1))
-            but = wx.Button ( p_integ, label="Set")
-            but.Bind ( wx.EVT_BUTTON, self.onInteg )
+            #self.integ_edit= wx.TextCtrl ( p_integ, size=(140, -1))
+            self.integ_edit = wx.TextCtrl ( p_integ, size=(140, -1), style=wx.TE_PROCESS_ENTER )
+            self.integ_edit.Bind ( wx.EVT_TEXT_ENTER, self.onInteg )
+            #but = wx.Button ( p_integ, label="Set")
+            #but.Bind ( wx.EVT_BUTTON, self.onInteg )
 
             sz_integ = wx.BoxSizer ( wx.HORIZONTAL )
             sz_integ.Add ( self.integ_label, 1, wx.EXPAND )
             sz_integ.Add ( self.integ_edit, 1, wx.EXPAND )
-            sz_integ.Add ( but, 1, wx.EXPAND )
+            #sz_integ.Add ( but, 1, wx.EXPAND )
             p_integ.SetSizer ( sz_integ )
 
-            sz_main.Add ( p_integ, 1, wx.EXPAND )
+            #sz_main.Add ( p_integ, 1, wx.EXPAND )
+            sz_main.Add ( p_integ, 0, 0, 0 )
+
+            # ---------------------------------
+            # A dummy element that expands and forces
+            #  what follows to the bottom.
+            sz_main.Add ( (0,0), 1, wx.EXPAND )
 
             # ------------------------------
             # Add main control buttons
@@ -328,7 +343,8 @@ class Right_Panel ( wx.Panel ) :
             sz_ctrl.Add ( self.b_ex, 1, wx.EXPAND )
             p_ctrl.SetSizer ( sz_ctrl )
 
-            sz_main.Add ( p_ctrl, 1, wx.EXPAND )
+            #sz_main.Add ( p_ctrl, 1, wx.EXPAND )
+            sz_main.Add ( p_ctrl, 0, 0, 0 )
 
         # on Windows 10, os.name returns "nt".
         #   on Linux it returns "posix"
@@ -393,6 +409,10 @@ class Right_Panel ( wx.Panel ) :
             sys.exit ()
 
         def new_scan ( self ) :
+            if self.busy :
+                print ( "Busy" )
+                return
+            self.busy = True
             vals = self.spec.bscan ()
             if vals == None or len(vals) != 2048 :
                 if vals != None :
@@ -400,6 +420,7 @@ class Right_Panel ( wx.Panel ) :
                 print ( "Graph update skipped" )
             else :
                 self.left.new_data ( vals )
+            self.busy = False
 
         # Used to capture single scans
         def onRead ( self, event ) :
