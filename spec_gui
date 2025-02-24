@@ -27,6 +27,8 @@ class Left_Panel ( wx.Panel ) :
         def __init__ ( self, parent, data ) :
             wx.Panel.__init__ ( self, parent )
 
+            self.right = None
+
             self.width = None
             self.height = None
             self.xy = None
@@ -35,6 +37,20 @@ class Left_Panel ( wx.Panel ) :
 
             self.Bind ( wx.EVT_SIZE, self.onResize )
             self.Bind ( wx.EVT_PAINT, self.OnPaint )
+
+            self.Bind ( wx.EVT_KEY_DOWN, self.onKey )
+
+        def setRight ( self, right ) :
+            self.right = right
+
+        # You get the shift key as its own event
+        # Keycodes seem to be uppercase ascii
+        def onKey ( self, event ) :
+            keycode = event.GetKeyCode ()
+            print ( hex(keycode) )
+            if keycode == wx.WXK_SPACE :
+                print ( "Space bar" )
+            #event.Skip ()
 
         # We get 3 resize events just starting up.
         # we need this to refresh after resize
@@ -478,6 +494,7 @@ class Spec_Frame ( wx.Frame ) :
 
             self.lpanel = Left_Panel ( splitter, self.data )
             self.rpanel = Right_Panel ( splitter, self.data, self.lpanel )
+            self.lpanel.setRight ( self.rpanel )
 
             # only left side grows
             splitter.SetSashGravity ( 1.0 )
