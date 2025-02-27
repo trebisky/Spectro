@@ -33,10 +33,17 @@ class Left_Panel ( wx.Panel ) :
             self.height = None
             self.xy = None
 
+            # We may change this later
+            self.lmargin = 0
+
+            self.cursor = False
+            self.curpos = None
+
             self.data = data
 
             self.Bind ( wx.EVT_SIZE, self.onResize )
-            self.Bind ( wx.EVT_PAINT, self.OnPaint )
+            self.Bind ( wx.EVT_PAINT, self.onPaint )
+            self.Bind ( wx.EVT_MOTION, self.onMove )
 
             self.Bind ( wx.EVT_KEY_DOWN, self.onKey )
 
@@ -47,10 +54,46 @@ class Left_Panel ( wx.Panel ) :
         # Keycodes seem to be uppercase ascii
         def onKey ( self, event ) :
             keycode = event.GetKeyCode ()
-            print ( hex(keycode) )
-            if keycode == wx.WXK_SPACE :
-                print ( "Space bar" )
-            #event.Skip ()
+            if keycode == ord('C') :
+                if self.cursor == True :
+                    print ( "Cursor off" )
+                    self.cursor = False
+                    self.right.hideCursor ()
+                else :
+                    print ( "Cursor on" )
+                    self.cursor = True
+                    self.right.showCursor ()
+
+            #print ( hex(keycode) )
+            #if keycode == wx.WXK_SPACE :
+            #    print ( "Space bar" )
+
+        # This is how we keep track of cursor position
+        def onMove ( self, event ) :
+            x,_ = event.GetPosition ()
+
+            #print ( "Cursor at ", x )
+
+            if x >= 0 and x < self.width :
+                self.curpos = x
+            else :
+                self.curpos = None
+
+            if not self.cursor :
+                return
+
+            #print ( "Cursor on at ", x )
+
+            if self.curpos :
+                self.SetCursor ( wx.Cursor(wx.CURSOR_BLANK) )
+            else :
+                self.SetCursor ( wx.Cursor(wx.CURSOR_PENCIL) )
+
+            self.right.postCursor ( x )
+
+            # trigger a repaint
+            self.Refresh ()
+
 
         # We get 3 resize events just starting up.
         # we need this to refresh after resize
@@ -89,16 +132,33 @@ class Left_Panel ( wx.Panel ) :
                     dc.DrawLine ( lastxy[0], lastxy[1], xy[0], xy[1] )
                 lastxy = xy
 
+        def mkHline ( self, y ) :
+
+            dc = wx.PaintDC ( self )
+            dc.SetPen ( wx.Pen(wx.BLACK, 1) )
+
+            dc.DrawLine ( self.lmargin, y, self.width-1, y )
+
+        def mkVline ( self, x ) :
+
+            dc = wx.PaintDC ( self )
+            dc.SetPen ( wx.Pen(wx.BLACK, 1) )
+
+            dc.DrawLine ( x, 0, x, self.height-1 )
+
         # We get lots of paint events, for reasons I don't understand,
         # and not simply related to cursor motion.
         # It is out of my control and it all works.
         # We just need to be ready to entirely redraw everything
         # whenever one of these events transpires.
-        def OnPaint ( self, event ) :
+        def onPaint ( self, event ) :
             #print ( "left Paint!" )
 
             dc = wx.PaintDC ( self )
             dc.Clear ()
+
+            if self.cursor and self.curpos :
+                self.mkVline ( self.curpos )
 
             # We get black by default
             dc.SetPen ( wx.Pen(wx.BLUE, 4) )
@@ -222,12 +282,16 @@ class Right_Panel ( wx.Panel ) :
             self.left = left
 
             self.spec = self.initSpectrometer ()
-            if self.spec == None :
+            #print ( self.spec )
+            if self.spec.ser == None :
                 print ( "Lost at Sea" )
                 exit ()
 
             self.auto_run = True
             self.busy = False
+
+            self.cursor = False
+            self.curpos = None
 
             self.timer = wx.Timer ( self )
             self.Bind ( wx.EVT_TIMER, self.timer_update, self.timer )
@@ -340,6 +404,37 @@ class Right_Panel ( wx.Panel ) :
             sz_main.Add ( (0,0), 1, wx.EXPAND )
 
             # ------------------------------
+            # dummy element before cursor
+            p_dummy = wx.Panel ( self, -1 )
+
+            lab = f"Dummy"
+            self.dummy_label = wx.StaticText ( p_dummy, label=lab )
+
+            sz_dummy = wx.BoxSizer ( wx.HORIZONTAL )
+            sz_dummy.Add ( self.dummy_label, 1, wx.EXPAND )
+            p_dummy.SetSizer ( sz_dummy )
+
+            #sz_main.Add ( p_dummy, 1, wx.EXPAND )
+            sz_main.Add ( p_dummy, 0, 0, 0 )
+
+            # ------------------------------
+            # place to display cursor
+            p_curs = wx.Panel ( self, -1 )
+            self.p_cursor = p_curs
+
+            lab = f"Cursor: {self.curpos}   "
+            self.curs_label = wx.StaticText ( p_curs, label=lab )
+
+            sz_curs = wx.BoxSizer ( wx.HORIZONTAL )
+            sz_curs.Add ( self.curs_label, 1, wx.EXPAND )
+            p_curs.SetSizer ( sz_curs )
+            p_curs.Hide ()
+            self.cursor = False
+
+            #sz_main.Add ( p_curs, 1, wx.EXPAND )
+            sz_main.Add ( p_curs, 0, 0, 0 )
+
+            # ------------------------------
             # Add main control buttons
             # These may eventually move to a top menu
             # especially Exit
@@ -361,6 +456,24 @@ class Right_Panel ( wx.Panel ) :
 
             #sz_main.Add ( p_ctrl, 1, wx.EXPAND )
             sz_main.Add ( p_ctrl, 0, 0, 0 )
+
+        def showCursor ( self ) :
+            print ( "show cursor" )
+            self.p_cursor.Show ()
+            self.Layout ()
+            self.cursor = True
+
+        def hideCursor ( self ) :
+            self.p_cursor.Hide ()
+            self.Layout ()
+            self.cursor = False
+
+        def postCursor ( self, curpos ) :
+            #print ( "Post cursor: ", curpos )
+            self.curpos = curpos
+            if self.cursor :
+                lab = f"Cursor: {self.curpos}   "
+                self.curs_label.SetLabel ( lab )
 
         # on Windows 10, os.name returns "nt".
         #   on Linux it returns "posix"

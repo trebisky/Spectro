@@ -54,6 +54,10 @@ class Spectro () :
     def __init__ ( self, device ) :
 
         self.ser = self.connect ( device )
+
+        # returning None here is useless, the caller still
+        # gets a "Spectro" object.
+        # The caller should check self.ser
         if self.ser == None :
             print ( "Init fails" )
             return None
