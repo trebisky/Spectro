@@ -19,6 +19,8 @@ linux_device = "/dev/ttyUSB2"
 
 windows_device = "COM3"
 
+user_device = None
+
 #My most mature wx code is:
 #/u1/Projects/ESP8266/Projects/tmon/gui
 
@@ -489,7 +491,9 @@ class Right_Panel ( wx.Panel ) :
         def initSpectrometer ( self ) :
             print ( "init spectrometer" )
 
-            if ( sys.platform == "linux" ) :
+            if user_device != None :
+                spec_device = user_device
+            elif sys.platform == "linux" :
                 spec_device = linux_device
             else :
                 spec_device = windows_device
@@ -641,6 +645,10 @@ class Spec_GUI ( wx.App ) :
 
 # ===============================================================================
 # ===============================================================================
+
+if len(sys.argv) > 1 :
+    user_device = sys.argv[1]
+    print ( "using serial device ", user_device )
 
 app = Spec_GUI ()
 app.MainLoop ()
