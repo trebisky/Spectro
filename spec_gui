@@ -15,7 +15,8 @@ import sys
 from Spectro import *
 
 #linux_device = "/dev/ttyUSB0"
-linux_device = "/dev/ttyUSB2"
+#linux_device = "/dev/ttyUSB2"
+linux_device = "/dev/ttyUSB1"
 
 windows_device = "COM3"
 
@@ -639,7 +640,7 @@ class Spec_GUI ( wx.App ) :
         def __init__ ( self ) :
             wx.App.__init__(self)
             #frame = Spec_Frame ( self, "BTC-100-S2 control" )
-            frame = Spec_Frame ( self, "BTC-100-S2 Whiz-Bang" )
+            frame = Spec_Frame ( self, "BTC-100-S2 Spectroscope" )
             self.SetTopWindow ( frame )
             frame.Show ( True )
 
