@@ -53,20 +53,23 @@ class SpectroError ( Exception ) :
 class Spectro () :
     def __init__ ( self, device ) :
 
+        self.average_val = 1
+        self.integ_val = 50
+
         self.ser = self.connect ( device )
 
         # returning None here is useless, the caller still
         # gets a "Spectro" object.
         # The caller should check self.ser
         if self.ser == None :
-            print ( "Init fails" )
+            print ( "Init fails -- no spectrometer found" )
             return None
 
-        self.average ( 1 )
-        self.average_val = 1
+        # We need a live spectrometer to set these
+        self.average ( self.average_val )
+        self.integ ( self.integ_val )
 
-        self.integ ( 50 )
-        self.integ_val = 50
+        return True
 
     def connect ( self, device ) :
         baud = 115200
@@ -124,7 +127,8 @@ class Spectro () :
         return None
 
     def finish ( self ) :
-        self.ser.close()
+        if self.ser != None :
+            self.ser.close()
         print ( "Done" )
 
     def set_integ ( self, val ) :
@@ -192,6 +196,8 @@ class Spectro () :
 
     # Set how many spectra to average
     def average ( self, val ) :
+        if self.ser == None :
+            return
         cmd = f"A{val}\n"
         #print ( "set averaging: ", cmd )
         expect = len(cmd) + 1 + 5
@@ -200,6 +206,8 @@ class Spectro () :
 
     # Set integration time in ms (50-65000)
     def integ ( self, val ) :
+        if self.ser == None :
+            return
         cmd = f"I{val}\n"
         #print ( "set integ: ", cmd )
         expect = len(cmd) + 1 + 5
@@ -208,6 +216,8 @@ class Spectro () :
 
     # reset the spectrometer (never used)
     def reset ( self ) :
+        if self.ser == None :
+            return
         cmd = "Q\n"
         self.ser.write ( cmd.encode('ascii') )
         buf = self.ser.read_until ( "\r\n", 8 )

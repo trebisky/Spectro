@@ -22,8 +22,145 @@ windows_device = "COM3"
 
 user_device = None
 
-#My most mature wx code is:
-#/u1/Projects/ESP8266/Projects/tmon/gui
+# I took some code from my temperature monitor project:
+# My most mature wx code for it is at:
+# /u1/Projects/ESP8266/Projects/tmon/gui
+# It is also on Github.
+#
+# The next two helper classes fix some shortcomings with wxPython,
+#  and came from the temperature monitor.
+#
+# Note that "EZtext" is what I call -- I don't call MyStaticText directly.
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+# wxPython has some severe brain damage as far as greying out text when you move
+# the mouse out of the window.  They don't understand the concept that this is
+# an information display, not some active control with interaction.
+#
+# https://stackoverflow.com/questions/17764457/make-disabled-text-render-black
+#
+# I also want to center text inside an area of fixed size, so I may as well
+# dive in.  I am taking the code posted by Hesky Fisher in the above post.
+#
+#    Thanks Hesky !!
+
+class MyStaticText ( wx.Control ):
+    def __init__(self, parent, id=wx.ID_ANY, label="", 
+                 pos=wx.DefaultPosition, size=wx.DefaultSize, 
+                 style=0, validator=wx.DefaultValidator, 
+                 name="MyStaticText"):
+        wx.Control.__init__(self, parent, id, pos, size, style|wx.NO_BORDER, validator, name)
+
+        wx.Control.SetLabel(self, label)
+        self.InheritAttributes()
+        self.SetInitialSize(size)
+
+        self.bg_color = parent.GetBackgroundColour ()
+        self.fg_color = wx.BLACK
+
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
+
+    def OnPaint(self, event):
+        dc = wx.BufferedPaintDC(self)
+        self.Draw(dc)
+
+    def Draw(self, dc):
+        width, height = self.GetClientSize()
+
+        if not width or not height:
+            return
+
+        # TJT - We should get the background of the parent instead
+        # backBrush = wx.Brush(wx.WHITE, wx.SOLID)
+        backBrush = wx.Brush ( self.bg_color, wx.SOLID)
+        dc.SetBackground(backBrush)
+        dc.Clear()
+
+        #dc.SetTextForeground(wx.BLACK)
+        dc.SetTextForeground ( self.fg_color )
+        dc.SetFont(self.GetFont())
+        label = self.GetLabel()
+        dc.DrawText(label, 0, 0)
+
+    def SetFGColour(self, colour):
+        self.fg_color = colour
+        self.Refresh()
+
+    def OnEraseBackground(self, event):
+        pass
+
+    def SetLabel(self, label):
+        wx.Control.SetLabel(self, label)
+        self.InvalidateBestSize()
+        self.SetSize(self.GetBestSize())
+        self.Refresh()
+
+    def SetFont(self, font):
+        wx.Control.SetFont(self, font)
+        self.InvalidateBestSize()
+        self.SetSize(self.GetBestSize())
+        self.Refresh()
+
+    def DoGetBestSize(self):
+        label = self.GetLabel()
+        font = self.GetFont()
+
+        if not font:
+            font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+
+        dc = wx.ClientDC(self)
+        dc.SetFont(font)
+
+        textWidth, textHeight = dc.GetTextExtent(label)
+        best = wx.Size(textWidth, textHeight)
+        self.CacheBestSize(best)
+        return best
+
+    def AcceptsFocus(self):
+        return False
+
+# Does not work.
+#    def SetForegroundColour(self, colour):
+#        wx.Control.SetForegroundColour(self, colour)
+#        self.Refresh()
+#
+#    def SetBackgroundColour(self, colour):
+#        wx.Control.SetBackgroundColour(self, colour)
+#        self.Refresh()
+
+    def GetDefaultAttributes(self):
+        return wx.StaticText.GetClassDefaultAttributes()
+
+    def ShouldInheritColours(self):
+        return True
+
+# This is my wrapper on the above
+# I had trouble getting this right.
+# The trick is that the __init__ method does a special thing.
+# it effectively returns "self" in a magic way.
+# (and "self" is the value returned by the superclass.)
+class EZtext ( MyStaticText ) :
+        def __init__ ( self, parent, sizer, message ) :
+            #rv = MyStaticText.__init__ ( self, parent, wx.ID_ANY, message )
+            #sizer.Add ( rv, 1, wx.EXPAND )
+            #print ( rv )
+            #print ( type(rv) )
+
+            # prefix some space here
+            padded = "    " + message
+            MyStaticText.__init__ ( self, parent, wx.ID_ANY, padded )
+            sizer.Add ( self, 1, wx.EXPAND )
+
+        def SetLabel ( self, msg ) :
+            padded = "    " + msg
+            super().SetLabel ( padded )
+
+
+# --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 # The left panel has the graph
 #
@@ -212,6 +349,11 @@ class Left_Panel ( wx.Panel ) :
         # from the spectrometer
         def new_data ( self, vals ) :
             self.data.update ( vals )
+            self.xy_data ()
+
+        # called from above, and when we load
+        # from file
+        def xy_data ( self ) :
             self.xy = self.data.get_xy ()
             #print ( "XY has points: ", len(self.xy) )
             #print ( self.xy[0] )
@@ -229,6 +371,8 @@ class Spec_Data () :
             self.raw = None
             self.autoscale = True
             self.max16 = 65536
+            self.min = None
+            self.max = None
 
         def auto ( self ) :
             self.autoscale = True
@@ -246,6 +390,9 @@ class Spec_Data () :
                     max = v
             self.min = min
             self.max = max
+
+        def get_minmax ( self ) :
+            return ( self.min, self.max )
 
         # New data arrived
         def update ( self, vals ) :
@@ -269,6 +416,36 @@ class Spec_Data () :
                 index += 1
             return rv
 
+        # Save spectrum to file
+        def save ( self ) :
+            index = 0
+            num = len(self.raw)
+            path = "spectro.out"
+
+            with open ( path, 'w' ) as file :
+                for v in self.raw :
+                    #file.write ( f"{index} {v}\n" )
+                    file.write ( f"{index:8d} {v:8d}\n" )
+                    index += 1
+            print ( num, " points written to ", path )
+
+        # Read spectrum from file
+        def load ( self ) :
+            path = "spectro.dat"
+            data = []
+            with open ( path, 'r' ) as file :
+                for line in file :
+                    if len(line) < 2 :
+                        continue
+                    if line[0] == '#' :
+                        continue
+                    ww = line.split()
+                    if len(ww) < 2 :
+                        continue
+                    data.append ( int(ww[1]) )
+            print ( len(data), "points read from file" )
+            return data
+
         # Called by resize events
         # This is how I keep this object informed
         # about things the left panel knows about
@@ -290,10 +467,13 @@ class Right_Panel ( wx.Panel ) :
             self.left = left
 
             self.spec = self.initSpectrometer ()
+
+            # We used to exit here if no Spectometer
+            # not anymore  4-19-2026
             #print ( self.spec )
-            if self.spec.ser == None :
-                print ( "Lost at Sea" )
-                exit ()
+            #if self.spec.ser == None :
+            #    print ( "Lost at Sea" )
+            #    exit ()
 
             self.auto_run = True
             self.busy = False
@@ -389,7 +569,8 @@ class Right_Panel ( wx.Panel ) :
             p_integ = wx.Panel ( self, -1 )
 
             val = self.spec.get_integ ()
-            lab = f"Gain: {val}   "
+            #lab = f"Gain: {val}   "
+            lab = f"Integ: {val}   "
             self.integ_label = wx.StaticText ( p_integ, label=lab )
             #self.integ_edit= wx.TextCtrl ( p_integ, size=(140, -1))
             self.integ_edit = wx.TextCtrl ( p_integ, size=(140, -1), style=wx.TE_PROCESS_ENTER )
@@ -407,6 +588,14 @@ class Right_Panel ( wx.Panel ) :
             sz_main.Add ( p_integ, 0, 0, 0 )
 
             # ---------------------------------
+            # min and max values
+            #lab = f"Min: {val}   "
+            #self.min_label = wx.StaticText ( p_integ, label=lab )
+            #sz_main.Add ( self.min_label, 0, 0, 0 )
+            self.t_min = EZtext ( self, sz_main, "Min - " )
+            self.t_max = EZtext ( self, sz_main, "Max - " )
+
+            # ---------------------------------
             # A dummy element that expands and forces
             #  what follows to the bottom.
             sz_main.Add ( (0,0), 1, wx.EXPAND )
@@ -415,11 +604,11 @@ class Right_Panel ( wx.Panel ) :
             # dummy element before cursor
             p_dummy = wx.Panel ( self, -1 )
 
-            lab = f"Dummy"
-            self.dummy_label = wx.StaticText ( p_dummy, label=lab )
+            #lab = f"Dummy"
+            #self.dummy_label = wx.StaticText ( p_dummy, label=lab )
 
             sz_dummy = wx.BoxSizer ( wx.HORIZONTAL )
-            sz_dummy.Add ( self.dummy_label, 1, wx.EXPAND )
+            #sz_dummy.Add ( self.dummy_label, 1, wx.EXPAND )
             p_dummy.SetSizer ( sz_dummy )
 
             #sz_main.Add ( p_dummy, 1, wx.EXPAND )
@@ -490,7 +679,7 @@ class Right_Panel ( wx.Panel ) :
         #print ( os.name )
         #print ( sys.platform )
         def initSpectrometer ( self ) :
-            print ( "init spectrometer" )
+            print ( "Try to connect to spectrometer" )
 
             if user_device != None :
                 spec_device = user_device
@@ -550,10 +739,15 @@ class Right_Panel ( wx.Panel ) :
         #    self.doExit ()
         #    sys.exit ()
 
+        # called by button or at 1Hz when autorun
         def new_scan ( self ) :
+            if self.spec.ser == None :
+                return
+
             if self.busy :
                 print ( "Busy" )
                 return
+
             self.busy = True
             vals = self.spec.bscan ()
             if vals == None or len(vals) != 2048 :
@@ -562,12 +756,15 @@ class Right_Panel ( wx.Panel ) :
                 print ( "Graph update skipped" )
             else :
                 self.left.new_data ( vals )
+                self.update ()
             self.busy = False
 
         # Used to capture single scans
         def onRead ( self, event ) :
             #print ( "Time for me to read" )
-            if not self.auto_run :
+            if self.auto_run :
+                print ( "Already running on auto" )
+            else :
                 self.new_scan ()
 
         # Used when weird things happen
@@ -584,7 +781,10 @@ class Right_Panel ( wx.Panel ) :
                 self.new_scan ()
 
         def update ( self ) :
-            print ( "update Right" )
+            #print ( "update Right" )
+            self.t_min.SetLabel ( f"Min {self.data.min}" )
+            self.t_max.SetLabel ( f"Max {self.data.max}" )
+
 
 # Geometry for initial layout
 xsize = 1000
@@ -602,9 +802,13 @@ class Spec_Frame ( wx.Frame ) :
             #top = wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
             wx.Frame.__init__(self, None, wx.ID_ANY, title, size=wsize )
 
+            # Window manager "X" clicked
+            self.Bind ( wx.EVT_CLOSE, self.onClose )
+
             menubar = wx.MenuBar ()
             filemenu = wx.Menu ()
             filemenu.Append ( 101, "Save", "Save" )
+            filemenu.Append ( 102, "Open", "Open" )
             filemenu.Append ( wx.ID_EXIT, "Exit", "Exit" )
             menubar.Append ( filemenu, 'File' )
             self.SetMenuBar ( menubar )
@@ -626,11 +830,23 @@ class Spec_Frame ( wx.Frame ) :
             splitter.SplitVertically ( self.lpanel, self.rpanel )
             splitter.SetSashPosition ( split_pos, True )
 
+        def onClose ( self, event ) :
+            self.rpanel.doExit ()
+            exit ()
+
         def onMenu ( self, event ) :
             id = event.GetId ()
             print ( "Event ", id )
             if id == 101 :
                 print ( "Save" )
+                self.data.save()
+                return
+            if id == 102 :
+                print ( "Open" )
+                data = self.data.load ()
+                self.data.update ( data )
+                self.lpanel.xy_data ()
+                self.rpanel.update ()
                 return
             if id == wx.ID_EXIT :
                 self.rpanel.doExit ()

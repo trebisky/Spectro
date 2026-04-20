@@ -2,6 +2,8 @@ spectrum
 spectrum*
 *.png
 zzz
+*.out
+*.dat
 __pycache__
 OLD
 OLD/*
